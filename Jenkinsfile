@@ -5,22 +5,18 @@ pipeline {
         SONARQUBE_SERVER = 'sonarqube'
         SONAR_TOKEN = credentials('sonar-jenkins-token')
 
-        // DB config used by Spring tests
-        SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/orders'
-        SPRING_DATASOURCE_USERNAME = 'postgres'
-        SPRING_DATASOURCE_PASSWORD = 'postgres'
+        SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5992/order_db'
+        SPRING_DATASOURCE_USERNAME = 'order'
+        SPRING_DATASOURCE_PASSWORD = 'order'
     }
 
     stages {
-
         stage('Print OS & Kernel Information') {
             steps {
                 sh '''
                     set -eux
-                    echo "==== OS Info ===="
                     uname -a || true
                     cat /etc/os-release || true
-                    echo "==== Java ===="
                     java -version || true
                 '''
             }
@@ -42,26 +38,30 @@ pipeline {
             steps {
                 sh '''
                     set -eux
-
-                    # Clean any old container from previous runs
                     docker rm -f ci-postgres || true
 
                     docker run -d --name ci-postgres \
-                      -e POSTGRES_DB=orders \
-                      -e POSTGRES_USER=postgres \
-                      -e POSTGRES_PASSWORD=postgres \
-                      -p 5432:5432 \
+                      -e POSTGRES_DB=order_db \
+                      -e POSTGRES_USER=order \
+                      -e POSTGRES_PASSWORD=order \
+                      -p 5992:5432 \
                       postgres:17.7
 
-                    # Wait until Postgres is ready
+                    ready=0
                     for i in $(seq 1 30); do
-                      docker exec ci-postgres pg_isready -U postgres -d orders && exit 0
+                      if docker exec ci-postgres pg_isready -U order -d order_db; then
+                        ready=1
+                        break
+                      fi
                       sleep 2
                     done
 
-                    echo "Postgres not ready" >&2
-                    docker logs ci-postgres || true
-                    exit 1
+                    if [ "$ready" -ne 1 ]; then
+                      docker logs ci-postgres || true
+                      exit 1
+                    fi
+
+                    docker exec ci-postgres psql -U order -d order_db -c "SELECT 1;"
                 '''
             }
         }
@@ -70,7 +70,10 @@ pipeline {
             steps {
                 sh '''
                     set -eux
-                    ./gradlew clean test jacocoTestReport jacocoRootReport
+                    ./gradlew clean test jacocoTestReport jacocoRootReport \
+                      -Dspring.datasource.url="$SPRING_DATASOURCE_URL" \
+                      -Dspring.datasource.username="$SPRING_DATASOURCE_USERNAME" \
+                      -Dspring.datasource.password="$SPRING_DATASOURCE_PASSWORD"
                 '''
             }
             post {
@@ -84,29 +87,11 @@ pipeline {
                 }
             }
         }
-
-//        stage('SonarQube Analysis') {
-//            steps {
-//                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-//                    sh '''
-//                        set -eux
-//                        export SONAR_TOKEN="${SONAR_TOKEN}"
-//
-//                        # Optional: avoid re-running tests if your sonar task dependsOn tests
-//                        # ./gradlew sonar -x test -x jacocoRootReport
-//
-//                        ./gradlew sonar
-//                    '''
-//                }
-//            }
-//        }
     }
 
     post {
         always {
-            // Always cleanup postgres container to avoid port conflicts
             sh 'docker rm -f ci-postgres || true'
-
             cleanWs()
         }
     }
