@@ -51,7 +51,7 @@ pipeline {
                       -e POSTGRES_USER=postgres \
                       -e POSTGRES_PASSWORD=postgres \
                       -p 5432:5432 \
-                      postgres:16
+                      postgres:17.7
 
                     # Wait until Postgres is ready
                     for i in $(seq 1 30); do
