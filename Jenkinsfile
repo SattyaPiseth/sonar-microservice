@@ -34,6 +34,16 @@ pipeline {
             }
         }
 
+        stage('Detect Docker Host Gateway') {
+          steps {
+            sh '''
+              set -eux
+              echo "Docker host gateway (default route):"
+              ip route | awk '/default/ {print $3}'
+            '''
+          }
+        }
+
         stage('Start PostgreSQL (Test)') {
             steps {
                 sh '''
@@ -67,26 +77,31 @@ pipeline {
         }
 
         stage('Build + Test + JaCoCo') {
-            steps {
-                sh '''
-                    set -eux
-                    ./gradlew clean test jacocoTestReport jacocoRootReport \
-                      -Dspring.datasource.url="$SPRING_DATASOURCE_URL" \
-                      -Dspring.datasource.username="$SPRING_DATASOURCE_USERNAME" \
-                      -Dspring.datasource.password="$SPRING_DATASOURCE_PASSWORD"
-                '''
+          steps {
+            sh '''
+              set -eux
+
+              DOCKER_HOST_IP="$(ip route | awk '/default/ {print $3}')"
+              echo "DOCKER_HOST_IP=$DOCKER_HOST_IP"
+
+              ./gradlew clean test jacocoTestReport jacocoRootReport \
+                -Dspring.datasource.url="jdbc:postgresql://${DOCKER_HOST_IP}:5992/order_db" \
+                -Dspring.datasource.username="order" \
+                -Dspring.datasource.password="order"
+            '''
+          }
+          post {
+            always {
+              junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+              archiveArtifacts allowEmptyArchive: true, artifacts: '''
+                **/build/reports/jacoco/**,
+                **/build/reports/tests/**,
+                **/build/libs/*.jar
+              '''
             }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
-                    archiveArtifacts allowEmptyArchive: true, artifacts: '''
-                        **/build/reports/jacoco/**,
-                        **/build/reports/tests/**,
-                        **/build/libs/*.jar
-                    '''
-                }
-            }
+          }
         }
+
     }
 
     post {
