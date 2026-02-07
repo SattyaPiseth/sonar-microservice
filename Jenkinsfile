@@ -1,12 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        // Optional: use Jenkins tool installers if you configured them
-        // jdk 'jdk-21'
-        // gradle 'gradle-9'
-    }
-
     environment {
         // Name must match the SonarQube server name you configured in Jenkins
         SONARQUBE_SERVER = 'sonarqube'
