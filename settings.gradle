@@ -1,0 +1,4 @@
+rootProject.name = 'rootProject'
+
+include 'product-service'
+include 'order-service'
