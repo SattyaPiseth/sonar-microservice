@@ -35,24 +35,24 @@ pipeline {
             }
         }
 
-//        stage('Build + Test + JaCoCo') {
-//            steps {
-//                sh '''
-//                    set -eux
-//                    ./gradlew clean test jacocoTestReport jacocoRootReport
-//                '''
-//            }
-//            post {
-//                always {
-//                    junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
-//                    archiveArtifacts allowEmptyArchive: true, artifacts: '''
-//                        **/build/reports/jacoco/**,
-//                        **/build/reports/tests/**,
-//                        **/build/libs/*.jar
-//                    '''
-//                }
-//            }
-//        }
+        stage('Build + Test + JaCoCo') {
+            steps {
+                sh '''
+                    set -eux
+                    ./gradlew clean test jacocoTestReport jacocoRootReport
+                '''
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+                    archiveArtifacts allowEmptyArchive: true, artifacts: '''
+                        **/build/reports/jacoco/**,
+                        **/build/reports/tests/**,
+                        **/build/libs/*.jar
+                    '''
+                }
+            }
+        }
 
 //        stage('SonarQube Analysis') {
 //            steps {
