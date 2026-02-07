@@ -4,6 +4,11 @@ pipeline {
     environment {
         SONARQUBE_SERVER = 'sonarqube'
         SONAR_TOKEN = credentials('sonar-jenkins-token')
+
+        // DB config used by Spring tests
+        SPRING_DATASOURCE_URL = 'jdbc:postgresql://localhost:5432/orders'
+        SPRING_DATASOURCE_USERNAME = 'postgres'
+        SPRING_DATASOURCE_PASSWORD = 'postgres'
     }
 
     stages {
@@ -26,11 +31,37 @@ pipeline {
                 checkout scm
                 sh '''
                     set -eux
-                    # Fix permission denied for gradlew
                     chmod +x gradlew
-                    # Ensure wrapper script uses unix line endings if it was edited on Windows
                     sed -i 's/\r$//' gradlew || true
                     ./gradlew -v
+                '''
+            }
+        }
+
+        stage('Start PostgreSQL (Test)') {
+            steps {
+                sh '''
+                    set -eux
+
+                    # Clean any old container from previous runs
+                    docker rm -f ci-postgres || true
+
+                    docker run -d --name ci-postgres \
+                      -e POSTGRES_DB=orders \
+                      -e POSTGRES_USER=postgres \
+                      -e POSTGRES_PASSWORD=postgres \
+                      -p 5432:5432 \
+                      postgres:16
+
+                    # Wait until Postgres is ready
+                    for i in $(seq 1 30); do
+                      docker exec ci-postgres pg_isready -U postgres -d orders && exit 0
+                      sleep 2
+                    done
+
+                    echo "Postgres not ready" >&2
+                    docker logs ci-postgres || true
+                    exit 1
                 '''
             }
         }
@@ -60,6 +91,10 @@ pipeline {
 //                    sh '''
 //                        set -eux
 //                        export SONAR_TOKEN="${SONAR_TOKEN}"
+//
+//                        # Optional: avoid re-running tests if your sonar task dependsOn tests
+//                        # ./gradlew sonar -x test -x jacocoRootReport
+//
 //                        ./gradlew sonar
 //                    '''
 //                }
@@ -69,6 +104,9 @@ pipeline {
 
     post {
         always {
+            // Always cleanup postgres container to avoid port conflicts
+            sh 'docker rm -f ci-postgres || true'
+
             cleanWs()
         }
     }
