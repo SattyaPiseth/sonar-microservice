@@ -130,17 +130,17 @@ pipeline {
         }
 
 
-//        stage('SonarQube Analysis') {
-//            steps {
-//                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-//                    sh '''
-//                        set -eux
-//                        export SONAR_TOKEN="${SONAR_TOKEN}"
-//                        ./gradlew sonar -x test -x jacocoRootReport
-//                    '''
-//                }
-//            }
-//        }
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh '''
+                        set -eux
+                        export SONAR_TOKEN="${SONAR_TOKEN}"
+                        ./gradlew sonar -x test -x jacocoRootReport
+                    '''
+                }
+            }
+        }
     }
 
     post {
