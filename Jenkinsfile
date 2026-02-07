@@ -90,32 +90,45 @@ pipeline {
         }
 
         stage('Build + Test + JaCoCo') {
-            steps {
-                sh '''
-                    set -eux
-                    DOCKER_HOST_IP="$(ip route | awk '/default/ {print $3}')"
-                    HOST_PORT="$(cat .pg_host_port)"
+          steps {
+            sh '''
+              set -eux
+              DOCKER_HOST_IP="$(ip route | awk '/default/ {print $3}')"
+              HOST_PORT="$(cat .pg_host_port)"
 
-                    echo "DOCKER_HOST_IP=$DOCKER_HOST_IP"
-                    echo "HOST_PORT=$HOST_PORT"
+              echo "DOCKER_HOST_IP=$DOCKER_HOST_IP"
+              echo "HOST_PORT=$HOST_PORT"
 
-                    ./gradlew clean test jacocoTestReport jacocoRootReport \
-                      -Dspring.datasource.url="jdbc:postgresql://${DOCKER_HOST_IP}:${HOST_PORT}/${TEST_DB_NAME}" \
-                      -Dspring.datasource.username="$SPRING_DATASOURCE_USERNAME" \
-                      -Dspring.datasource.password="$SPRING_DATASOURCE_PASSWORD"
-                '''
-            }
-            post {
-                always {
-                    junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
-                    archiveArtifacts allowEmptyArchive: true, artifacts: '''
-                      **/build/reports/jacoco/**,
-                      **/build/reports/tests/**,
-                      **/build/libs/*.jar
-                    '''
+              echo "Testing TCP reachability..."
+              timeout 2 bash -lc "cat < /dev/null > /dev/tcp/${DOCKER_HOST_IP}/${HOST_PORT}"
+              echo "TCP OK"
+
+              export SPRING_APPLICATION_JSON='{
+                "spring": {
+                  "datasource": {
+                    "url": "jdbc:postgresql://'${DOCKER_HOST_IP}':'${HOST_PORT}'/order_db",
+                    "username": "order",
+                    "password": "order",
+                    "driver-class-name": "org.postgresql.Driver"
+                  }
                 }
+              }'
+
+              ./gradlew clean test jacocoTestReport jacocoRootReport
+            '''
+          }
+          post {
+            always {
+              junit allowEmptyResults: true, testResults: '**/build/test-results/test/*.xml'
+              archiveArtifacts allowEmptyArchive: true, artifacts: '''
+                **/build/reports/jacoco/**,
+                **/build/reports/tests/**,
+                **/build/libs/*.jar
+              '''
             }
+          }
         }
+
 
 //        stage('SonarQube Analysis') {
 //            steps {
