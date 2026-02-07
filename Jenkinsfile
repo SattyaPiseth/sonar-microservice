@@ -45,36 +45,35 @@ pipeline {
         }
 
         stage('Start PostgreSQL (Test)') {
-            steps {
-                sh '''
-                    set -eux
-                    docker rm -f ci-postgres || true
+          steps {
+            sh '''
+              set -eux
+              docker rm -f ci-postgres || true
 
-                    docker run -d --name ci-postgres \
-                      -e POSTGRES_DB=order_db \
-                      -e POSTGRES_USER=order \
-                      -e POSTGRES_PASSWORD=order \
-                      -p 5992:5432 \
-                      postgres:17.7
+              docker run -d --name ci-postgres \
+                -e POSTGRES_USER=order \
+                -e POSTGRES_PASSWORD=order \
+                -p 5992:5432 \
+                postgres:17
 
-                    ready=0
-                    for i in $(seq 1 30); do
-                      if docker exec ci-postgres pg_isready -U order -d order_db; then
-                        ready=1
-                        break
-                      fi
-                      sleep 2
-                    done
+              # Wait for server ready
+              for i in $(seq 1 30); do
+                if docker exec ci-postgres pg_isready -U order; then
+                  break
+                fi
+                sleep 2
+              done
 
-                    if [ "$ready" -ne 1 ]; then
-                      docker logs ci-postgres || true
-                      exit 1
-                    fi
+              # Ensure DB exists (pg_isready does NOT guarantee database exists)
+              docker exec ci-postgres psql -U order -d postgres -tc "SELECT 1 FROM pg_database WHERE datname='order_db'" | grep -q 1 \
+                || docker exec ci-postgres psql -U order -d postgres -c "CREATE DATABASE order_db;"
 
-                    docker exec ci-postgres psql -U order -d order_db -c "SELECT 1;"
-                '''
-            }
+              # Verify
+              docker exec ci-postgres psql -U order -d order_db -c "SELECT 1;"
+            '''
+          }
         }
+
 
         stage('Build + Test + JaCoCo') {
           steps {
